@@ -2,6 +2,23 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.0.7'
 	id 'io.spring.dependency-management' version '1.1.7'
+
+	id 'checkstyle'
+	id 'pmd'
+	id 'jacoco'
+
+	id 'com.github.spotbugs' version '6.5.10'
+	id 'org.sonarqube' version '7.4.0.8496'
+}
+
+jacocoTestReport {
+	reports {
+		xml.required = true
+	}
+}
+
+test {
+	finalizedBy jacocoTestReport
 }
 
 group = 'com.innowise'

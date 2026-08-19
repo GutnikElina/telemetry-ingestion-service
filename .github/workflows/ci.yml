@@ -1,0 +1,15 @@
+---
+name: Main Pipeline
+
+'on':
+  push:
+    branches: [main, develop, ci/TIRI-5-add-local-ci-and-git-hooks]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  run-reusable-ci:
+    uses: yaaanni/iot-shared-actions/.github/workflows/java-ci.yml@main
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
