@@ -2,6 +2,7 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 CREATE TABLE telemetry_points (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
     time TIMESTAMPTZ NOT NULL,
     device_id UUID NOT NULL,
     location GEOMETRY(Point, 4326) NOT NULL,
