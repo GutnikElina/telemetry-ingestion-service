@@ -1,4 +1,3 @@
----
 name: Main Pipeline
 
 'on':
@@ -10,6 +9,6 @@ name: Main Pipeline
 
 jobs:
   run-reusable-ci:
-    uses: yaaanni/iot-shared-actions/.github/workflows/java-ci.yml@main
+    uses: yaaanni/iot-shared-actions/.github/workflows/java-ci.yml@66aa6be53619111d090972ac663fbeaa7debd585
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
