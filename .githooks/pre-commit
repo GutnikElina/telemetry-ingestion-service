@@ -1,0 +1,16 @@
+#!/bin/sh
+
+echo "===> Running Spotless auto-formatting..."
+./gradlew spotlessApply
+
+git add -u
+
+echo "===> Running Checkstyle..."
+./gradlew checkstyleMain
+
+if [ $? -ne 0 ]; then
+    echo "Checkstyle failed! Fix the errors above and try committing again."
+    exit 1
+fi
+
+echo "Pre-commit checks passed successfully!"

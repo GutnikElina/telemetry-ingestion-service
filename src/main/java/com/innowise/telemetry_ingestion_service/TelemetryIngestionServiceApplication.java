@@ -6,8 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class TelemetryIngestionServiceApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(TelemetryIngestionServiceApplication.class, args);
-	}
-
+  public static void main(String[] args) {
+    SpringApplication.run(TelemetryIngestionServiceApplication.class, args);
+  }
 }
