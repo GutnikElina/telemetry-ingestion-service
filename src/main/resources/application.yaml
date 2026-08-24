@@ -1,3 +1,9 @@
 spring:
   application:
     name: telemetry-ingestion-service
+
+telemetry:
+  ports:
+    tcp:
+      teltonika: 5001
+      wialon: 5002
