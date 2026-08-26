@@ -14,18 +14,11 @@ public abstract class AbstractTcpServer {
 
     private final int port;
     private final ObjectProvider<? extends ChannelHandler> decoder;
-    private final LengthFieldBasedFrameDecoder frameBuffer;
     private DisposableServer server;
 
-
-    public AbstractTcpServer(
-            int port,
-            ObjectProvider<? extends ChannelHandler> decoder,
-            LengthFieldBasedFrameDecoder frameBuffer
-    ) {
+    public AbstractTcpServer(int port, ObjectProvider<? extends ChannelHandler> decoder) {
         this.port = port;
         this.decoder = decoder;
-        this.frameBuffer = frameBuffer;
     }
 
     @PostConstruct
@@ -34,7 +27,6 @@ public abstract class AbstractTcpServer {
                 .port(port)
                 .doOnConnection(connection -> {
                     log.debug("New connection on port {}", port);
-                    connection.addHandlerLast(frameBuffer);
                     connection.addHandlerLast(decoder.getObject());
                 })
                 .bindNow();

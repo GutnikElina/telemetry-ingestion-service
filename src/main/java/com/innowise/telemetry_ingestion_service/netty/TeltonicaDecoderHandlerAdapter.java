@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @Scope("prototype")
-public class TeltonicaDecoder extends ChannelInboundHandlerAdapter {
+public class TeltonicaDecoderHandlerAdapter extends ChannelInboundHandlerAdapter {
     private final static String preambleErrorMsg = "Corrupted package occurred. Preamble should be equal to 0, but was %d";
     private final static String crcMismatchErrorMsg = "Package was corrupted. Calculated IBM CRC-16 (%d) doesn't match with expected (%d)";
 
@@ -51,9 +51,6 @@ public class TeltonicaDecoder extends ChannelInboundHandlerAdapter {
 
                     //todo создать рекорд
                 }
-
-
-
 
             } finally {
                 ReferenceCountUtil.release(msg);
