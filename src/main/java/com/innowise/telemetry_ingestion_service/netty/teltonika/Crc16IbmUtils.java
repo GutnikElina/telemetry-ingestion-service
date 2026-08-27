@@ -1,4 +1,4 @@
-package com.innowise.telemetry_ingestion_service.netty;
+package com.innowise.telemetry_ingestion_service.netty.teltonika;
 
 import io.netty.buffer.ByteBuf;
 

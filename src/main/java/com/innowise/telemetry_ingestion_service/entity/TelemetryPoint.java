@@ -1,6 +1,7 @@
 package com.innowise.telemetry_ingestion_service.entity;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 public record TelemetryPoint(
         String deviceId,
@@ -11,6 +12,6 @@ public record TelemetryPoint(
         short angle,
         byte satellites,
         short speed,
-        SensorsData sensorsData
+        Map<Byte, Object> sensorsData
         ) {
 }

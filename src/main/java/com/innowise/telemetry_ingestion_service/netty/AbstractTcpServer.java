@@ -1,7 +1,6 @@
 package com.innowise.telemetry_ingestion_service.netty;
 
 import io.netty.channel.ChannelHandler;
-import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;

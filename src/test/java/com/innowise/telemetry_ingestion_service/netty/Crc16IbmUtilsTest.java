@@ -1,5 +1,6 @@
 package com.innowise.telemetry_ingestion_service.netty;
 
+import com.innowise.telemetry_ingestion_service.netty.teltonika.Crc16IbmUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
