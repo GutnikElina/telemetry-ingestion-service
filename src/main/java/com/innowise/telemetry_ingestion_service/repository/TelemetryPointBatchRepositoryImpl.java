@@ -1,84 +1,107 @@
 package com.innowise.telemetry_ingestion_service.repository;
 
 import com.innowise.telemetry_ingestion_service.entity.TelemetryPoint;
+import io.r2dbc.spi.Connection;
+import io.r2dbc.spi.ConnectionFactory;
+import io.r2dbc.spi.Result;
+import io.r2dbc.spi.Statement;
 import lombok.AllArgsConstructor;
 import org.reactivestreams.Publisher;
-import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+
 
 @Repository
 @AllArgsConstructor
 public class TelemetryPointBatchRepositoryImpl implements TelemetryPointBatchRepository {
 
-    private final DatabaseClient databaseClient;
+    private static final int BATCH_SIZE = 500;
+    private static final Duration BATCH_TIMEOUT = Duration.ofMillis(100);
+
+    private static final String INSERT_SQL = """
+            INSERT INTO telemetry_points
+                (device_id, time, location, speed, altitude, heading, gps_accuracy, sensors)
+            VALUES
+                ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326), $5, $6, $7, $8, $9::jsonb)
+            ON CONFLICT (device_id, time) DO NOTHING
+            """;
+
+    private final ConnectionFactory connectionFactory;
+    private final JsonMapper jsonMapper;
+
 
     @Override
-    public Mono<Void> saveAll(Publisher<TelemetryPoint> points) {
+    public Mono<BatchInsertResult> saveAll(Publisher<TelemetryPoint> points) {
         return Flux.from(points)
-                .collectList()
-                .flatMap(this::insertBatch);
+                .bufferTimeout(BATCH_SIZE, BATCH_TIMEOUT)
+                .concatMap(this::insertChunk)
+                .reduce(BatchInsertResult.empty(), BatchInsertResult::merge);
     }
 
-    private Mono<Void> insertBatch(List<TelemetryPoint> batch) {
-        if(batch.isEmpty()){
-            return Mono.empty();
+    private Mono<BatchInsertResult> insertChunk(List<TelemetryPoint> chunk) {
+        if (chunk.isEmpty()) {
+            return Mono.just(BatchInsertResult.empty());
         }
+        return Mono.usingWhen(
+                Mono.from(connectionFactory.create()),
+                connection -> executeBatch(connection, chunk),
+                connection -> Mono.from(connection.close())
+        ).map(insertedCount -> new BatchInsertResult(
+                insertedCount,
+                chunk.size() - insertedCount,
+                0
+        ));
+    }
 
-        StringBuilder sql = new StringBuilder(
-                "INSERT INTO telemetry_points (time, device_id, location, speed, altitude, sensors) VALUES "
-        );
-
-        int paramIndex = 1;
-
-        for (int i = 0; i < batch.size(); i++) {
-            sql.append(String.format(
-                    "($%d, $%d, ST_GeomFromText($%d, 4326), $%d, $%d, $%d::jsonb)",
-                    paramIndex,
-                    paramIndex + 1,
-                    paramIndex + 2,
-                    paramIndex + 3,
-                    paramIndex + 4,
-                    paramIndex + 5
-            ));
-
-            paramIndex += 6;
-
-            if (i < batch.size() - 1) {
-                sql.append(", ");
+    private Mono<Long> executeBatch(Connection connection, List<TelemetryPoint> chunk) {
+        Statement statement = connection.createStatement(INSERT_SQL);
+        for (int i = 0; i < chunk.size(); i++) {
+            bindPoint(statement, chunk.get(i));
+            if (i < chunk.size() - 1) {
+                statement.add();
             }
         }
+        return Flux.from(statement.execute())
+                .flatMap(Result::getRowsUpdated)
+                .reduce(0L, Long::sum);
+    }
 
-        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql.toString());
-
-        int bindIndex = 0;
-        for (TelemetryPoint point : batch) {
-            spec = spec.bind(bindIndex++, point.time());
-            spec = spec.bind(bindIndex++, point.deviceId());
-            spec = spec.bind(bindIndex++, point.location());
-
-            if (point.speed() != null) {
-                spec = spec.bind(bindIndex++, point.speed());
-            } else {
-                spec = spec.bindNull(bindIndex++, Float.class);
-            }
-
-            if (point.altitude() != null) {
-                spec = spec.bind(bindIndex++, point.altitude());
-            } else {
-                spec = spec.bindNull(bindIndex++, Float.class);
-            }
-
-            if (point.sensors() != null) {
-                spec = spec.bind(bindIndex++, point.sensors().asString());
-            } else {
-                spec = spec.bindNull(bindIndex++, String.class);
-            }
+    private void bindPoint(Statement statement, TelemetryPoint point) {
+        statement.bind(0, point.deviceId());
+        statement.bind(1, point.time());
+        statement.bind(2, point.longitude());
+        statement.bind(3, point.latitude());
+        bindNullable(statement, 4, point.speed(), Float.class);
+        bindNullable(statement, 5, point.altitude(), Float.class);
+        bindNullable(statement, 6, point.heading(), Float.class);
+        bindNullable(statement, 7, point.gpsAccuracy(), Float.class);
+        if (point.sensors() != null && !point.sensors().isEmpty()) {
+            statement.bind(8, toJson(point.sensors()));
+        } else {
+            statement.bindNull(8, String.class);
         }
+    }
 
-        return spec.then();
+    private static <T> void bindNullable(Statement statement, int index, T value, Class<T> type) {
+        if (value != null) {
+            statement.bind(index, value);
+        } else {
+            statement.bindNull(index, type);
+        }
+    }
+
+    private String toJson(Map<String, Object> sensors) {
+        try {
+            return jsonMapper.writeValueAsString(sensors);
+        } catch (JacksonException e) {
+            throw new IllegalArgumentException("Could not serialize sensors map to JSON", e);
+        }
     }
 }

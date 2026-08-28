@@ -5,5 +5,5 @@ import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
 public interface TelemetryPointBatchRepository {
-    Mono<Void> saveAll(Publisher<TelemetryPoint> points);
+    Mono<BatchInsertResult> saveAll(Publisher<TelemetryPoint> points);
 }

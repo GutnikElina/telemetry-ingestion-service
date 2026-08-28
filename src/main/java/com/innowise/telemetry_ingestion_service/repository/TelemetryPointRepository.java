@@ -1,19 +1,58 @@
 package com.innowise.telemetry_ingestion_service.repository;
 
 import com.innowise.telemetry_ingestion_service.entity.TelemetryPoint;
-import org.springframework.data.r2dbc.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import lombok.AllArgsConstructor;
+import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
-public interface TelemetryPointRepository extends ReactiveCrudRepository<TelemetryPoint, UUID> {
-    Flux<TelemetryPoint> findByDeviceIdAndTimeBetweenOrderByTimeAsc(UUID deviceId, Instant from,
-                                                                    Instant to);
+@Repository
+@AllArgsConstructor
+public class TelemetryPointRepository {
 
-    @Query("SELECT * FROM telemetry_points WHERE device_id=:deviceId ORDER BY time DESC LIMIT 1")
-    Mono<TelemetryPoint> findLatestPoint(@Param("deviceId") UUID device_id);
+    private final TelemetryPointRowRepository rowRepository;
+    private final JsonMapper jsonMapper;
+
+
+    public Flux<TelemetryPoint> findByDeviceIdAndTimeBetweenOrderByTimeAsc(UUID deviceId, Instant from, Instant to) {
+        return rowRepository.findByDeviceIdAndTimeBetweenOrderByTimeAsc(deviceId, from, to)
+                .map(this::toDomain);
+    }
+
+    public Mono<TelemetryPoint> findLatestPoint(UUID deviceId) {
+        return rowRepository.findLatestPoint(deviceId).map(this::toDomain);
+    }
+
+    private TelemetryPoint toDomain(TelemetryPointRow row) {
+        return new TelemetryPoint(
+                row.deviceId(),
+                row.time(),
+                row.latitude(),
+                row.longitude(),
+                row.speed(),
+                row.altitude(),
+                row.heading(),
+                row.gpsAccuracy(),
+                parseSensors(row.sensors())
+        );
+    }
+
+    private Map<String, Object> parseSensors(String sensorsJson) {
+        if (sensorsJson == null || sensorsJson.isBlank()) {
+            return null;
+        }
+        try {
+            return jsonMapper.readValue(sensorsJson, new TypeReference<Map<String, Object>>() {
+            });
+        } catch (JacksonException e) {
+            throw new IllegalArgumentException("Could not parse sensors JSON: " + sensorsJson, e);
+        }
+    }
 }

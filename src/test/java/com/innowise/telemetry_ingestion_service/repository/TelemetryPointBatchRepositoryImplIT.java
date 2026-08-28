@@ -1,59 +1,22 @@
 package com.innowise.telemetry_ingestion_service.repository;
 
 import com.innowise.telemetry_ingestion_service.entity.TelemetryPoint;
+import com.innowise.telemetry_ingestion_service.support.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
-@Testcontainers
-class TelemetryPointBatchRepositoryImplIT {
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
-            DockerImageName.parse("timescale/timescaledb-ha:pg16")
-                    .asCompatibleSubstituteFor("postgres")
-    )
-            .withDatabaseName("telemetry_db")
-            .withUsername("telemetry_user")
-            .withPassword("telemetry_password");
-
-    @DynamicPropertySource
-    static void registerDynamicProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.r2dbc.url", () ->
-                "r2dbc:postgresql://%s:%d/%s".formatted(
-                        postgres.getHost(),
-                        postgres.getMappedPort(5432),
-                        postgres.getDatabaseName()
-                )
-        );
-        registry.add("spring.r2dbc.username", postgres::getUsername);
-        registry.add("spring.r2dbc.password", postgres::getPassword);
-
-        registry.add("spring.flyway.url", () ->
-                "jdbc:postgresql://%s:%d/%s".formatted(
-                        postgres.getHost(),
-                        postgres.getMappedPort(5432),
-                        postgres.getDatabaseName()
-                )
-        );
-        registry.add("spring.flyway.user", postgres::getUsername);
-        registry.add("spring.flyway.password", postgres::getPassword);
-    }
+class TelemetryPointBatchRepositoryImplIT extends AbstractIntegrationTest {
 
     @Autowired
     private TelemetryPointBatchRepository batchRepository;
@@ -68,28 +31,24 @@ class TelemetryPointBatchRepositoryImplIT {
         Instant now = Instant.now();
 
         TelemetryPoint point1 = new TelemetryPoint(
-                null,
-                deviceA,
-                now,
-                "POINT(37.6173 55.7558)",
-                60.5f,
-                150.0f,
-                io.r2dbc.postgresql.codec.Json.of("{\"fuel\": 80}")
+                deviceA, now,
+                55.7558, 37.6173,
+                60.5f, 150.0f, 12.0f, 3.5f,
+                Map.of("fuel", 80)
         );
-
         TelemetryPoint point2 = new TelemetryPoint(
-                null,
-                deviceB,
-                now.plusSeconds(5),
-                "POINT(30.3141 59.9386)",
-                45.0f,
-                20.0f,
+                deviceB, now.plusSeconds(5),
+                59.9386, 30.3141,
+                45.0f, 20.0f, null, null,
                 null
         );
 
-        List<TelemetryPoint> batch = List.of(point1, point2);
-
-        StepVerifier.create(batchRepository.saveAll(Flux.fromIterable(batch)))
+        StepVerifier.create(batchRepository.saveAll(Flux.fromIterable(List.of(point1, point2))))
+                .assertNext(result -> {
+                    assertThat(result.inserted()).isEqualTo(2);
+                    assertThat(result.duplicates()).isZero();
+                    assertThat(result.rejected()).isZero();
+                })
                 .verifyComplete();
 
         StepVerifier.create(
@@ -99,8 +58,10 @@ class TelemetryPointBatchRepositoryImplIT {
                 )
                 .assertNext(found -> {
                     assertThat(found.deviceId()).isEqualTo(deviceA);
+                    assertThat(found.latitude()).isCloseTo(55.7558, org.assertj.core.data.Offset.offset(1e-6));
+                    assertThat(found.longitude()).isCloseTo(37.6173, org.assertj.core.data.Offset.offset(1e-6));
                     assertThat(found.speed()).isEqualTo(60.5f);
-                    assertThat(found.id()).isNotNull();
+                    assertThat(found.sensors()).containsEntry("fuel", 80);
                 })
                 .verifyComplete();
 
@@ -108,6 +69,32 @@ class TelemetryPointBatchRepositoryImplIT {
                 .assertNext(found -> {
                     assertThat(found.sensors()).isNull();
                     assertThat(found.altitude()).isEqualTo(20.0f);
+                    assertThat(found.heading()).isNull();
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldSkipDuplicateOnConflictWithoutFailingWholeBatch() {
+        UUID deviceId = UUID.randomUUID();
+        Instant time = Instant.now();
+
+        TelemetryPoint original = new TelemetryPoint(
+                deviceId, time, 10.0, 20.0, 50.0f, 100.0f, null, null, null
+        );
+        TelemetryPoint redelivered = new TelemetryPoint(
+                deviceId, time, 10.0, 20.0, 999.0f, 999.0f, null, null, null
+        );
+        TelemetryPoint otherValidPoint = new TelemetryPoint(
+                deviceId, time.plusSeconds(1), 11.0, 21.0, 55.0f, 110.0f, null, null, null
+        );
+
+        StepVerifier.create(batchRepository.saveAll(
+                        Flux.fromIterable(List.of(original, redelivered, otherValidPoint))
+                ))
+                .assertNext(result -> {
+                    assertThat(result.inserted()).isEqualTo(2);
+                    assertThat(result.duplicates()).isEqualTo(1);
                 })
                 .verifyComplete();
     }
