@@ -14,10 +14,11 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static com.innowise.telemetry_ingestion_service.netty.teltonika.Constants.DEVICE_IMEI_KEY;
+import static com.innowise.telemetry_ingestion_service.netty.teltonika.Constants.DEVICE_ID_KEY;
 
 @Slf4j
 @Component
@@ -38,12 +39,26 @@ public class TeltonicaDecoderHandlerAdapter extends ChannelInboundHandlerAdapter
                 validateTheData(in);
 
                 List<TelemetryPoint> points = new ArrayList<>();
-                populatePointsList(ctx, in, points);
+                byte codecId = in.readByte();
+                byte numberOfData = in.readByte();
+                populatePointsList(ctx, in, points, codecId, numberOfData);
 
                 //todo rest of logic
                 // gps drift
                 // redundancy check
-                repository.saveAll(points); //todo pushback logic
+                repository.saveAll(points).collectList().subscribe(
+                        savedPoints -> {
+                            ctx.channel().eventLoop().execute(() -> {
+                                byte bufferSize = 4;
+                                ByteBuf successResponse = ctx.alloc().buffer(bufferSize);
+                                successResponse.writeInt(numberOfData);
+                                ctx.writeAndFlush(successResponse);
+                            });
+                        },
+                        error -> {
+                            log.error("Persistence Error occurred:\n", error);
+                            ctx.channel().eventLoop().execute(ctx::close);
+                        });
 
             } finally {
                 ReferenceCountUtil.release(msg);
@@ -69,16 +84,16 @@ public class TeltonicaDecoderHandlerAdapter extends ChannelInboundHandlerAdapter
         }
     }
 
-    private void populatePointsList(ChannelHandlerContext ctx, ByteBuf in, List<TelemetryPoint> points) {
-        String imei = ctx.channel().attr(DEVICE_IMEI_KEY).get();
-        byte codecId = in.readByte();
-        byte numberOfData = in.readByte();
+    private void populatePointsList(ChannelHandlerContext ctx, ByteBuf in, List<TelemetryPoint> points,
+                                    byte codecId, byte numberOfData) {
+        String imei = ctx.channel().attr(DEVICE_ID_KEY).get();
+
         for (int i = 0; i < numberOfData; i++) {
             long time = in.readLong();
             byte priority = in.readByte();
 
             int longitude = in.readInt();
-            int latitude = in.readInt(); //todo is it positive? 
+            int latitude = in.readInt();
             short altitude = in.readShort();
             short angle = in.readShort();
             byte satellites = in.readByte();
