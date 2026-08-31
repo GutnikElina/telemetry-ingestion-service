@@ -12,3 +12,8 @@ spring:
     user: ${TIMESCALE_USER:telemetry_user}
     password: ${TIMESCALE_PASSWORD:telemetry_password}
     locations: classpath:db/migration
+
+telemetry :
+  ingestion :
+    batch-size : ${TELEMETRY_BATCH_SIZE:500}
+    batch-timeout-ms : ${TELEMETRY_BATCH_TIMEOUT:100}

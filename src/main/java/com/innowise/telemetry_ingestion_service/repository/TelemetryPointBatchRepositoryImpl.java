@@ -2,15 +2,15 @@ package com.innowise.telemetry_ingestion_service.repository;
 
 import com.innowise.telemetry_ingestion_service.entity.TelemetryPoint;
 import io.r2dbc.spi.Connection;
-import io.r2dbc.spi.ConnectionFactory;
 import io.r2dbc.spi.Result;
 import io.r2dbc.spi.Statement;
-import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Publisher;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Duration;
@@ -19,11 +19,8 @@ import java.util.Map;
 
 
 @Repository
-@AllArgsConstructor
+@Slf4j
 public class TelemetryPointBatchRepositoryImpl implements TelemetryPointBatchRepository {
-
-    private static final int BATCH_SIZE = 500;
-    private static final Duration BATCH_TIMEOUT = Duration.ofMillis(100);
 
     private static final String INSERT_SQL = """
             INSERT INTO telemetry_points
@@ -33,14 +30,28 @@ public class TelemetryPointBatchRepositoryImpl implements TelemetryPointBatchRep
             ON CONFLICT (device_id, time) DO NOTHING
             """;
 
-    private final ConnectionFactory connectionFactory;
     private final JsonMapper jsonMapper;
+    private final DatabaseClient databaseClient;
+    private final int batchSize;
+    private final Duration batchTimeout;
+
+    public TelemetryPointBatchRepositoryImpl(
+            JsonMapper jsonMapper,
+            DatabaseClient databaseClient,
+            @Value("${telemetry.ingestion.batch-size:500}") int batchSize,
+            @Value("${telemetry.ingestion.batch-timeout-ms:100}") long batchTimeoutMs
+    ) {
+        this.jsonMapper = jsonMapper;
+        this.databaseClient=databaseClient;
+        this.batchSize = batchSize;
+        this.batchTimeout = Duration.ofMillis(batchTimeoutMs);
+    }
 
 
     @Override
     public Mono<BatchInsertResult> saveAll(Publisher<TelemetryPoint> points) {
         return Flux.from(points)
-                .bufferTimeout(BATCH_SIZE, BATCH_TIMEOUT)
+                .bufferTimeout(batchSize, batchTimeout)
                 .concatMap(this::insertChunk)
                 .reduce(BatchInsertResult.empty(), BatchInsertResult::merge);
     }
@@ -49,15 +60,13 @@ public class TelemetryPointBatchRepositoryImpl implements TelemetryPointBatchRep
         if (chunk.isEmpty()) {
             return Mono.just(BatchInsertResult.empty());
         }
-        return Mono.usingWhen(
-                Mono.from(connectionFactory.create()),
-                connection -> executeBatch(connection, chunk),
-                connection -> Mono.from(connection.close())
-        ).map(insertedCount -> new BatchInsertResult(
-                insertedCount,
-                chunk.size() - insertedCount,
-                0
-        ));
+
+        return databaseClient.inConnection(connection -> executeBatch(connection,chunk))
+                .map(insertedCount->new BatchInsertResult(
+                        insertedCount,
+                        chunk.size()-insertedCount,
+                        0
+                ));
     }
 
     private Mono<Long> executeBatch(Connection connection, List<TelemetryPoint> chunk) {
@@ -100,8 +109,9 @@ public class TelemetryPointBatchRepositoryImpl implements TelemetryPointBatchRep
     private String toJson(Map<String, Object> sensors) {
         try {
             return jsonMapper.writeValueAsString(sensors);
-        } catch (JacksonException e) {
-            throw new IllegalArgumentException("Could not serialize sensors map to JSON", e);
+        } catch (Exception e) {
+            log.error("Failed to serialize sensors map to JSON: {}", sensors, e);
+            return "{}";
         }
     }
 }
