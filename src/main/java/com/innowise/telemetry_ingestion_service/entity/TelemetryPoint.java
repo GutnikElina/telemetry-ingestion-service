@@ -1,23 +1,19 @@
 package com.innowise.telemetry_ingestion_service.entity;
 
-import org.springframework.data.relational.core.mapping.Table;
-
-
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
-@Table("telemetry_points")
 public record  TelemetryPoint(
         UUID deviceId,
         Instant time,
         double latitude,
         double longitude,
-        Float speed,
-        Float altitude,
-        Float heading,
-        Float gpsAccuracy,
-        Map<String, Object> sensors
+        float speed,
+        float altitude,
+        float heading,
+        byte satellites,
+        Map<Short, Object> sensors
 ) {
     public TelemetryPoint {
         if (deviceId == null) {

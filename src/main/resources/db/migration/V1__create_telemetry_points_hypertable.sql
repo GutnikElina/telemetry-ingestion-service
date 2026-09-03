@@ -2,10 +2,10 @@ CREATE TABLE telemetry_points (
     time TIMESTAMPTZ NOT NULL,
     device_id UUID NOT NULL,
     location GEOMETRY(Point, 4326) NOT NULL,
-    speed REAL,
-    altitude REAL,
-    heading REAL,
-    gps_accuracy REAL,
+    speed REAL NOT NULL,
+    altitude REAL NOT NULL,
+    heading REAL NOT NULL,
+    satellites SMALLINT NOT NULL,
     sensors JSONB,
     PRIMARY KEY (device_id,time)
 );

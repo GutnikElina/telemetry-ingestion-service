@@ -2,9 +2,7 @@ package com.innowise.telemetry_ingestion_service.repository;
 
 import com.innowise.telemetry_ingestion_service.entity.TelemetryPoint;
 import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
@@ -22,7 +20,7 @@ import java.util.UUID;
 @Slf4j
 public class TelemetryPointRepository {
 
-    private static final TypeReference<Map<String, Object>> SENSORS_TYPE_REF =
+    private static final TypeReference<Map<Short, Object>> SENSORS_TYPE_REF =
             new TypeReference<>() {};
 
     private final TelemetryPointRowRepository rowRepository;
@@ -55,17 +53,17 @@ public class TelemetryPointRepository {
                 row.time(),
                 row.latitude(),
                 row.longitude(),
-                row.speed(),
-                row.altitude(),
-                row.heading(),
-                row.gpsAccuracy(),
+                row.speed() != null ? row.speed() : 0.0f,
+                row.altitude() != null ? row.altitude() : 0.0f,
+                row.heading() != null ? row.heading() : 0.0f,
+                row.satellites() != null ? row.satellites().byteValue() : (byte) 0,
                 parseSensors(row.sensors())
         );
     }
 
-    private Map<String, Object> parseSensors(String sensorsJson) {
+    private Map<Short, Object> parseSensors(String sensorsJson) {
         if (sensorsJson == null || sensorsJson.isBlank()) {
-            return null;
+            return Collections.emptyMap();
         }
         try {
             return jsonMapper.readValue(sensorsJson, SENSORS_TYPE_REF);

@@ -11,7 +11,7 @@ record TelemetryPointRow(
         Float speed,
         Float altitude,
         Float heading,
-        Float gpsAccuracy,
+        Short satellites,
         String sensors
 ) {
 }

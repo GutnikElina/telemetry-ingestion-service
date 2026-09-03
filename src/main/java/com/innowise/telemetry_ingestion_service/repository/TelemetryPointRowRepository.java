@@ -14,7 +14,7 @@ public interface TelemetryPointRowRepository extends Repository<TelemetryPointRo
     String SELECT_COLUMNS = """
             device_id, time,
             ST_Y(location) AS latitude, ST_X(location) AS longitude,
-            speed, altitude, heading, gps_accuracy, sensors::text AS sensors
+            speed, altitude, heading, satellites, sensors::text AS sensors
             """;
 
     @Query("SELECT " + SELECT_COLUMNS + " FROM telemetry_points "
