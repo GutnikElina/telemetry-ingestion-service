@@ -1,7 +1,7 @@
 package com.innowise.telemetry_ingestion_service.netty.teltonika;
 
 import com.innowise.telemetry_ingestion_service.entity.TelemetryPoint;
-import com.innowise.telemetry_ingestion_service.repository.TelemetryPointRepository;
+import com.innowise.telemetry_ingestion_service.service.BatchPointsProcessingService;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -12,11 +12,10 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static com.innowise.telemetry_ingestion_service.netty.teltonika.Constants.DEVICE_ID_KEY;
 
@@ -29,7 +28,7 @@ public class TeltonicaDecoderHandlerAdapter extends ChannelInboundHandlerAdapter
     private final static String crcMismatchErrorMsg = "Package was corrupted. Calculated IBM CRC-16 (%d) doesn't match with expected (%d)";
 
     private final TeltonikaIOElementsDecoder ioDecoder;
-    private final TelemetryPointRepository repository;
+    private final BatchPointsProcessingService processor;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
@@ -38,28 +37,27 @@ public class TeltonicaDecoderHandlerAdapter extends ChannelInboundHandlerAdapter
                 log.debug("Received {} bytes.\nStarting to parse.", in.readableBytes());
                 validateTheData(in);
 
-                List<TelemetryPoint> points = new ArrayList<>();
                 byte codecId = in.readByte();
                 byte numberOfData = in.readByte();
+                List<TelemetryPoint> points = new ArrayList<>(numberOfData);
                 populatePointsList(ctx, in, points, codecId, numberOfData);
 
-                //todo rest of logic
-                // gps drift
-                // redundancy check
-                repository.saveAll(points).collectList().subscribe(
-                        savedPoints -> {
-                            ctx.channel().eventLoop().execute(() -> {
-                                byte bufferSize = 4;
-                                ByteBuf successResponse = ctx.alloc().buffer(bufferSize);
-                                successResponse.writeInt(numberOfData);
-                                ctx.writeAndFlush(successResponse);
-                            });
-                        },
-                        error -> {
-                            log.error("Persistence Error occurred:\n", error);
-                            ctx.channel().eventLoop().execute(ctx::close);
-                        });
+                ctx.channel().config().setAutoRead(false);
+                processor.processPoints(points).subscribe(
+                        processedPoints ->
+                                ctx.channel().eventLoop().execute(() -> {
+                                    byte bufferSize = 4;
+                                    ByteBuf successResponse = ctx.alloc().buffer(bufferSize);
+                                    successResponse.writeInt(numberOfData);
+                                    ctx.writeAndFlush(successResponse);
 
+                                }),
+                        error -> {
+                            log.error("Processing Error occurred:\n", error);
+                            ctx.channel().eventLoop().execute(ctx::close);
+                        },
+                        () -> ctx.channel().config().setAutoRead(true)
+                );
             } finally {
                 ReferenceCountUtil.release(msg);
             }
@@ -69,13 +67,14 @@ public class TeltonicaDecoderHandlerAdapter extends ChannelInboundHandlerAdapter
     }
 
     private static void validateTheData(ByteBuf in) {
+        final byte preambleAndContentLengthLength = 8;
         int preamble = in.readInt();
         if (preamble != 0) {
             throw new IllegalArgumentException(String.format(preambleErrorMsg, preamble));
         }
 
         int contentLength = in.readInt();
-        int expectedCrc = in.getInt(contentLength);
+        int expectedCrc = in.getInt(preambleAndContentLengthLength + contentLength);
 
         int calculatedCrc = Crc16IbmUtils.calculate(in, 0, contentLength);
         log.debug("Checking CRC-16/IBM. Value: {}", calculatedCrc);
@@ -86,7 +85,7 @@ public class TeltonicaDecoderHandlerAdapter extends ChannelInboundHandlerAdapter
 
     private void populatePointsList(ChannelHandlerContext ctx, ByteBuf in, List<TelemetryPoint> points,
                                     byte codecId, byte numberOfData) {
-        String imei = ctx.channel().attr(DEVICE_ID_KEY).get();
+        String deviceId = ctx.channel().attr(DEVICE_ID_KEY).get();
 
         for (int i = 0; i < numberOfData; i++) {
             long time = in.readLong();
@@ -99,13 +98,13 @@ public class TeltonicaDecoderHandlerAdapter extends ChannelInboundHandlerAdapter
             byte satellites = in.readByte();
             short speed = in.readShort();
 
-            Map<Byte, Object> sensorsData = ioDecoder.decode(in);
+            Map<Short, Object> sensorsData = ioDecoder.decode(in);
 
             TelemetryPoint telemetryPoint = new TelemetryPoint(
-                    imei,
-                    Instant.ofEpochMilli(time).atZone(ZoneOffset.UTC).toLocalDateTime(),
-                    latitude,
-                    longitude,
+                    UUID.fromString(deviceId),
+                    Instant.ofEpochMilli(time),
+                    latitude / 10_000_000.0,
+                    longitude / 10_000_000.0,
                     altitude,
                     angle,
                     satellites,

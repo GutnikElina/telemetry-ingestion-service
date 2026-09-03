@@ -6,5 +6,5 @@ import java.util.Map;
 
 public interface TeltonikaIOElementsDecoder {
 
-     Map<Byte, Object> decode(ByteBuf in);
+     Map<Short, Object> decode(ByteBuf in);
 }

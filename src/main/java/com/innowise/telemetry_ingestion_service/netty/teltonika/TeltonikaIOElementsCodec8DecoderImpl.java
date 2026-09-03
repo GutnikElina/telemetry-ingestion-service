@@ -9,36 +9,36 @@ import java.util.Map;
 
 @Slf4j
 @Component
-public class TeltonikaIOElementsDecoderImpl implements TeltonikaIOElementsDecoder {
+public class TeltonikaIOElementsCodec8DecoderImpl implements TeltonikaIOElementsDecoder {
 
     @Override
-    public Map<Byte, Object> decode(ByteBuf in) {
-        Map<Byte, Object> result = new HashMap<>();
+    public Map<Short, Object> decode(ByteBuf in) {
+        Map<Short, Object> result = new HashMap<>();
 
         byte reason = in.readByte();
-        result.put(reason, "reason");
+        result.put(null, reason);
 
         byte numberOfTotalEvents = in.readByte();
 
         byte numberOfOneByteEvents = in.readByte();
 
         for (int i = 0; i < numberOfOneByteEvents; i++) {
-            result.put(in.readByte(), in.readByte());
+            result.put((short) in.readByte(), in.readByte());
         }
 
         byte numberOfTwoByteEvents = in.readByte();
         for (int i = 0; i < numberOfTwoByteEvents; i++) {
-            result.put(in.readByte(), in.readShort());
+            result.put((short) in.readByte(), in.readShort());
         }
 
         byte numberOfFourByteEvents = in.readByte();
         for (int i = 0; i < numberOfFourByteEvents; i++) {
-            result.put(in.readByte(), in.readInt());
+            result.put((short) in.readByte(), in.readInt());
         }
 
         byte numberOfEightByteEvents = in.readByte();
         for (int i = 0; i < numberOfEightByteEvents; i++) {
-            result.put(in.readByte(), in.readLong());
+            result.put((short) in.readByte(), in.readLong());
         }
 
         if (numberOfTotalEvents != result.size()) {
