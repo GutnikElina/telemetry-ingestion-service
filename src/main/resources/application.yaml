@@ -1,3 +1,15 @@
 spring:
   application:
     name: telemetry-ingestion-service
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVER}
+
+telemetry:
+  ports:
+    tcp:
+      teltonika: 5001
+      wialon: 5002
+
+kafka:
+  telemetry-topic:
+    name: logistics.telemetry.points.v1
