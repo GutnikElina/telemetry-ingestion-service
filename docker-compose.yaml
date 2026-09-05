@@ -1,0 +1,26 @@
+networks:
+  telemetry-network:
+    driver: bridge
+
+services:
+  telemetry-timescaledb:
+    image: timescale/timescaledb-ha:pg16
+    container_name: telemetry-timescaledb
+    environment:
+      POSTGRES_DB: ${TIMESCALE_DB:-telemetry_db}
+      POSTGRES_USER: ${TIMESCALE_USER:-telemetry_user}
+      POSTGRES_PASSWORD: ${TIMESCALE_PASSWORD:-telemetry_password}
+    ports:
+      - "${TIMESCALE_PORT:-5432}:5432"
+    volumes:
+      - timescale_data:/home/postgres/pgdata/data
+      - ./docker/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TIMESCALE_USER:-telemetry_user} -d ${TIMESCALE_DB:-telemetry_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  timescale_data:
