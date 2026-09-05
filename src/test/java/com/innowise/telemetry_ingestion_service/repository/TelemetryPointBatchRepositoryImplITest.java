@@ -4,7 +4,6 @@ import com.innowise.telemetry_ingestion_service.entity.TelemetryPoint;
 import com.innowise.telemetry_ingestion_service.support.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
@@ -16,7 +15,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
 class TelemetryPointBatchRepositoryImplITest extends AbstractIntegrationTest {
 
     @Autowired
@@ -27,11 +25,11 @@ class TelemetryPointBatchRepositoryImplITest extends AbstractIntegrationTest {
 
     @Test
     void shouldInsertBatchAndReadBack() {
-        UUID deviceA = UUID.randomUUID();
-        UUID deviceB = UUID.randomUUID();
+        var deviceA = UUID.randomUUID();
+        var deviceB = UUID.randomUUID();
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
-        TelemetryPoint point1 = new TelemetryPoint(
+        var point1 = new TelemetryPoint(
                 deviceA, now,
                 55.7558, 37.6173,
                 60.5f, 150.0f, 12.0f, (byte) 5,
@@ -81,10 +79,10 @@ class TelemetryPointBatchRepositoryImplITest extends AbstractIntegrationTest {
 
     @Test
     void shouldSkipDuplicateOnConflictWithoutFailingWholeBatch() {
-        UUID deviceId = UUID.randomUUID();
-        Instant time = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        var deviceId = UUID.randomUUID();
+        var time = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
-        TelemetryPoint original = new TelemetryPoint(
+        var original = new TelemetryPoint(
                 deviceId, time, 10.0, 20.0, 50.0f, 100.0f, 0.0f, (byte) 4, Map.of()
         );
         TelemetryPoint redelivered = new TelemetryPoint(
@@ -117,6 +115,4 @@ class TelemetryPointBatchRepositoryImplITest extends AbstractIntegrationTest {
                 })
                 .verifyComplete();
     }
-
-
 }

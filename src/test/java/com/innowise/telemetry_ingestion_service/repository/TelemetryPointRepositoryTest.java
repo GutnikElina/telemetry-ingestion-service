@@ -1,5 +1,6 @@
 package com.innowise.telemetry_ingestion_service.repository;
 
+import com.innowise.telemetry_ingestion_service.mapper.TelemetryPointMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -30,14 +31,15 @@ class TelemetryPointRepositoryTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        JsonMapper jsonMapper = new JsonMapper();
-        repository = new TelemetryPointRepository(rowRepository, jsonMapper, meterRegistry);
+        var jsonMapper = new JsonMapper();
+        var mapper=new TelemetryPointMapper(jsonMapper,meterRegistry);
+        repository = new TelemetryPointRepository(rowRepository,mapper );
     }
 
     @Test
     void shouldFallbackToEmptyMapAndIncrementCounterWhenJsonIsCorrupted() {
-        UUID deviceId = UUID.randomUUID();
-        Instant time = Instant.now();
+        var deviceId = UUID.randomUUID();
+        var time = Instant.now();
 
         TelemetryPointRow corruptedRow = new TelemetryPointRow(
                 deviceId, time, 55.0, 37.0, 50.0f, 100.0f, 0.0f, (short) 5,

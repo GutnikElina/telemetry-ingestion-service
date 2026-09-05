@@ -3,7 +3,7 @@ package com.innowise.telemetry_ingestion_service.repository;
 import java.time.Instant;
 import java.util.UUID;
 
-record TelemetryPointRow(
+public record TelemetryPointRow(
         UUID deviceId,
         Instant time,
         double latitude,

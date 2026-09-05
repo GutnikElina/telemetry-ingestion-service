@@ -4,7 +4,6 @@ import com.innowise.telemetry_ingestion_service.entity.TelemetryPoint;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.r2dbc.spi.Connection;
-import io.r2dbc.spi.R2dbcNonTransientResourceException;
 import io.r2dbc.spi.R2dbcTransientException;
 import io.r2dbc.spi.Result;
 import io.r2dbc.spi.Statement;
