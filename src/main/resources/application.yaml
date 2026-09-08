@@ -1,3 +1,19 @@
 spring:
   application:
     name: telemetry-ingestion-service
+
+  r2dbc:
+    url: r2dbc:postgresql://${TIMESCALE_HOST:localhost}:${TIMESCALE_PORT:5432}/${TIMESCALE_DB:telemetry_db}
+    username: ${TIMESCALE_USER:telemetry_user}
+    password: ${TIMESCALE_PASSWORD:telemetry_password}
+
+  flyway:
+    url: jdbc:postgresql://${TIMESCALE_HOST:localhost}:${TIMESCALE_PORT:5432}/${TIMESCALE_DB:telemetry_db}
+    user: ${TIMESCALE_USER:telemetry_user}
+    password: ${TIMESCALE_PASSWORD:telemetry_password}
+    locations: classpath:db/migration
+
+telemetry :
+  ingestion :
+    batch-size : ${TELEMETRY_BATCH_SIZE:500}
+    batch-timeout-ms : ${TELEMETRY_BATCH_TIMEOUT:100}
